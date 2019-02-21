@@ -1,0 +1,24 @@
+language: java
+jdk: oraclejdk8
+
+# Cache gradle dependencies (should be faster to download them from cache)
+cache:
+  directories:
+    - $HOME/.gradle/wrapper
+    - $HOME/.gradle/caches/modules-2/files-2.1
+
+# Setup environment
+before_install:
+  - chmod +x gradlew
+
+# Default gradle task will be run automatically on build, no need to define it
+
+before_deploy:
+  - ./gradlew html:dist
+  - zip -r bublz-$TRAVIS_TAG.zip ./html/build/dist/
+deploy:
+  provider: pages
+  skip-cleanup: true
+  github-token: $GITHUB_TOKEN
+  on:
+    branch: production
