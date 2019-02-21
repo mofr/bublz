@@ -14,10 +14,10 @@ before_install:
 
 before_deploy:
   - ./gradlew html:dist
-  - zip -r bublz-$TRAVIS_TAG.zip ./html/build/dist/
 deploy:
   provider: pages
   skip-cleanup: true
   github-token: $GITHUB_TOKEN
+  local_dir: ./html/build/dist/
   on:
     branch: production
