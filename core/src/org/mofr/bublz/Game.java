@@ -3,9 +3,7 @@ package org.mofr.bublz;
 import aurelienribon.tweenengine.Tween;
 import aurelienribon.tweenengine.TweenManager;
 import com.badlogic.ashley.core.Entity;
-import com.badlogic.ashley.core.Family;
 import com.badlogic.ashley.core.PooledEngine;
-import com.badlogic.ashley.utils.ImmutableArray;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
@@ -13,7 +11,7 @@ import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.math.Vector3;
-import org.mofr.bublz.components.*;
+import org.mofr.bublz.components.ClickComponent;
 import org.mofr.bublz.factories.BalloonFactory;
 import org.mofr.bublz.factories.BubbleFactory;
 import org.mofr.bublz.factories.SparkleFactory;
@@ -25,10 +23,6 @@ import org.mofr.bublz.systems.*;
 public class Game extends ApplicationAdapter implements InputProcessor {
 	private OrthographicCamera camera;
 	private PooledEngine engine;
-	private SparkleFactory sparkleFactory;
-	private BalloonFactory balloonFactory;
-	private BubbleFactory bubbleFactory;
-	private ImmutableArray<Entity> circles;
 	private Assets assets;
 	private Level currentLevel = null;
 	private Level level_1;
@@ -44,10 +38,11 @@ public class Game extends ApplicationAdapter implements InputProcessor {
 		tweenManager = new TweenManager();
 		Tween.setCombinedAttributesLimit(4);
 		Tween.registerAccessor(Entity.class, new EntityTweenAccessor());
-		sparkleFactory = new SparkleFactory(engine, assets.sparkle);
-		balloonFactory = new BalloonFactory(engine, assets.balloon);
-		bubbleFactory = new BubbleFactory(engine, assets.bubble, tweenManager);
+		SparkleFactory sparkleFactory = new SparkleFactory(engine, assets.sparkle);
+		BalloonFactory balloonFactory = new BalloonFactory(engine, assets.balloon);
+		BubbleFactory bubbleFactory = new BubbleFactory(engine, assets.bubble, tweenManager);
 		Gdx.input.setInputProcessor(this);
+		CollisionSystem collisionSystem = new CollisionSystem(engine, sparkleFactory, assets);
 		BubbleEmitterSystem bubbleEmitterSystem = new BubbleEmitterSystem(bubbleFactory);
 		BalloonEmitterSystem balloonEmitterSystem = new BalloonEmitterSystem(balloonFactory);
 		AnimationSystem animationSystem = new AnimationSystem();
@@ -56,6 +51,7 @@ public class Game extends ApplicationAdapter implements InputProcessor {
 		LinearMovementSystem linearMovementSystem = new LinearMovementSystem();
 		BackgroundRenderSystem backgroundRenderSystem = new BackgroundRenderSystem(camera);
 		RenderSystem renderSystem = new RenderSystem(camera);
+		engine.addSystem(collisionSystem);
 		engine.addSystem(bubbleEmitterSystem);
 		engine.addSystem(balloonEmitterSystem);
 		engine.addSystem(animationSystem);
@@ -64,7 +60,6 @@ public class Game extends ApplicationAdapter implements InputProcessor {
 		engine.addSystem(linearMovementSystem);
 		engine.addSystem(backgroundRenderSystem);
 		engine.addSystem(renderSystem);
-		circles = engine.getEntitiesFor(Family.all(CircleColliderComponent.class, TransformComponent.class).get());
 
 		background = new Background(engine, tweenManager);
 
@@ -133,40 +128,12 @@ public class Game extends ApplicationAdapter implements InputProcessor {
 	@Override
 	public boolean touchDown(int screenX, int screenY, int pointer, int button) {
 		Vector3 pos = camera.unproject(new Vector3(screenX, screenY, 0));
-		boolean hit = false;
-		// TODO iterate in z order
-		for (Entity entity : circles) {
-			CircleColliderComponent circleCollider = CircleColliderComponent.mapper.get(entity);
-			TransformComponent transformComponent = TransformComponent.mapper.get(entity);
-			AnimationComponent animationComponent = AnimationComponent.mapper.get(entity);
-			float radius = circleCollider.radius;
-			double dx = transformComponent.x - pos.x;
-			double dy = transformComponent.y - pos.y;
-			double distance = Math.sqrt(dx * dx + dy * dy);
-			if (distance <= radius) {
-				entity.remove(CircleColliderComponent.class);
-				hit = true;
-				LimitedLifetimeComponent limitedLifetimeComponent = engine.createComponent(LimitedLifetimeComponent.class);
-				entity.add(limitedLifetimeComponent);
-				animationComponent.time = 0;
-
-				BalloonComponent balloonComponent = BalloonComponent.mapper.get(entity);
-				if (balloonComponent != null) {
-					animationComponent.animation = assets.balloon.getPopAnimation(balloonComponent.color);
-					limitedLifetimeComponent.lifetime = assets.balloon.getPopAnimation(balloonComponent.color).getAnimationDuration();
-					float volume = Math.max(transformComponent.z / 10, 0.3f);
-					assets.balloon.getPopSound().play(volume);  // TODO stereo sound
-				} else {
-					animationComponent.animation = assets.bubble.getSplashAnimation();
-					limitedLifetimeComponent.lifetime = assets.bubble.getSplashAnimation().getAnimationDuration();
-					assets.bubble.getSplashSound().play();
-				}
-				break;
-			}
-		}
-		if (!hit) {
-			sparkleFactory.create(pos.x, pos.y);
-		}
+		Entity entity = engine.createEntity();
+		ClickComponent clickComponent = engine.createComponent(ClickComponent.class);
+		clickComponent.x = pos.x;
+		clickComponent.y = pos.y;
+		entity.add(clickComponent);
+		engine.addEntity(entity);
 		return true;
 	}
 
