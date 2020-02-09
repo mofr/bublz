@@ -1,5 +1,6 @@
 language: java
 jdk: oraclejdk8
+dist: trusty
 
 # Cache gradle dependencies (should be faster to download them from cache)
 cache:
